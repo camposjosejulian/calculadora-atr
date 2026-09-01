@@ -1,2 +1,12 @@
+[project]
+name = "calculadora-atr"
+version = "0.1.0"
+dependencies = [
+    "requests",
+    "pandas",
+    "numpy",
+    "yfinance"
+]
+
 [tool.vercel]
-entrypoint = "api.atr:handler"
+entrypoint = "api/atr.py"
