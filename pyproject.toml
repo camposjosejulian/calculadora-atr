@@ -9,4 +9,4 @@ dependencies = [
 ]
 
 [tool.vercel]
-entrypoint = "api/atr.py"
+entrypoint = "api.atr:handler"
