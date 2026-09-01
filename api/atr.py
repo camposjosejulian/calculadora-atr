@@ -23,6 +23,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         resultados = []
         periodo_atr = 14
+        multiplicador_sl = 1.5  # Distancia del Stop Loss basada en ATR
 
         for nombre, simbolo in ACTIVOS.items():
             try:
@@ -42,10 +43,17 @@ class handler(BaseHTTPRequestHandler):
                     atr = tr.ewm(alpha=1/periodo_atr, adjust=False).mean().iloc[-1]
                     precio_actual = df['close'].iloc[-1]
                     
+                    # Niveles de Stop Loss (1.5 * ATR)
+                    distancia_sl = atr * multiplicador_sl
+                    sl_compra = precio_actual - distancia_sl
+                    sl_venta = precio_actual + distancia_sl
+                    
                     resultados.append({
                         "activo": nombre,
                         "precio": round(float(precio_actual), 4),
-                        "atr": round(float(atr), 4)
+                        "atr": round(float(atr), 4),
+                        "sl_compra": round(float(sl_compra), 4),
+                        "sl_venta": round(float(sl_venta), 4)
                     })
             except Exception:
                 pass
