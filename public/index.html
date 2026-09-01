@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora ATR - Mercados</title>
+    <title>Calculadora ATR y Stop Loss - Mercados</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-6xl mx-auto">
         <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold tracking-tight text-emerald-400 mb-2">Panel de Volatilidad ATR</h1>
-            <p class="text-slate-400 text-sm">Cálculo automático en tiempo real vía Python y Vercel</p>
+            <h1 class="text-3xl font-bold tracking-tight text-emerald-400 mb-2">Panel de Volatilidad y Stop Loss (ATR)</h1>
+            <p class="text-slate-400 text-sm">Cálculo dinámico en tiempo real integrado con gestión de riesgo (1.5x ATR)</p>
         </header>
 
         <div id="loading" class="text-center py-12 text-slate-400 animate-pulse">
-            Consultando precios y calculando ATR para los 22 activos... (Puede tardar unos segundos)
+            Consultando precios, calculando ATR y niveles de riesgo para los 22 activos...
         </div>
 
         <div id="tabla-container" class="hidden overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl">
@@ -24,6 +24,8 @@
                         <th class="p-4">Activo</th>
                         <th class="p-4">Precio Actual</th>
                         <th class="p-4">ATR (15m)</th>
+                        <th class="p-4 text-rose-400">SL Compra (Long)</th>
+                        <th class="p-4 text-cyan-400">SL Venta (Short)</th>
                     </tr>
                 </thead>
                 <tbody id="resultados-body" class="divide-y divide-slate-800/60 text-sm"></tbody>
@@ -47,6 +49,8 @@
                         <td class="p-4 font-medium text-white">${item.activo}</td>
                         <td class="p-4 text-slate-300">${item.precio}</td>
                         <td class="p-4 font-semibold text-emerald-400">${item.atr}</td>
+                        <td class="p-4 font-mono text-rose-400">${item.sl_compra}</td>
+                        <td class="p-4 font-mono text-cyan-400">${item.sl_venta}</td>
                     `;
                     tbody.appendChild(row);
                 });
