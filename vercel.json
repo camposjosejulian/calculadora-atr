@@ -1,6 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/api/atr", "destination": "/api/atr.py" },
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ]
-}
