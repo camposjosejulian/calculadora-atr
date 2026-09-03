@@ -2,20 +2,21 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- El user-scalable=no evita que el celular haga zoom al tocar la pantalla -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ATR & Gestión Exness</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Ajustes para pantallas de celular muy estrechas */
         input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         td, th { vertical-align: middle; }
+        /* Oculta la barra de scroll en el menú de botones para que se vea limpio */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-300 min-h-screen p-2 text-xs sm:text-sm font-sans">
     
-    <!-- Panel de Control Interactivo -->
-    <div class="bg-gray-900 rounded-lg p-3 mb-3 border border-gray-800 shadow-lg">
+    <!-- Panel Interactivo de Capital y Riesgo -->
+    <div class="bg-gray-900 rounded-lg p-3 mb-2 border border-gray-800 shadow-lg">
         <div class="grid grid-cols-3 gap-2 text-center mb-1">
             <label class="text-gray-400 text-[10px] uppercase font-bold">Capital ($)</label>
             <label class="text-gray-400 text-[10px] uppercase font-bold">Riesgo (%)</label>
@@ -28,13 +29,22 @@
         </div>
     </div>
 
+    <!-- NAVEGACIÓN: Botones de Categorías -->
+    <div class="flex overflow-x-auto gap-2 mb-3 pb-1 no-scrollbar text-[11px] font-bold">
+        <button onclick="filtrarCategoria('Todos')" id="btn-Todos" class="cat-btn px-4 py-2 rounded-full bg-blue-600 text-white whitespace-nowrap transition-colors">Todos</button>
+        <button onclick="filtrarCategoria('Forex')" id="btn-Forex" class="cat-btn px-4 py-2 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap transition-colors">Divisas</button>
+        <button onclick="filtrarCategoria('Indices')" id="btn-Indices" class="cat-btn px-4 py-2 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap transition-colors">Índices</button>
+        <button onclick="filtrarCategoria('Crypto')" id="btn-Crypto" class="cat-btn px-4 py-2 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap transition-colors">Cripto</button>
+        <button onclick="filtrarCategoria('Materias')" id="btn-Materias" class="cat-btn px-4 py-2 rounded-full bg-gray-800 text-gray-400 whitespace-nowrap transition-colors">Materias Primas</button>
+    </div>
+
     <!-- Mensaje de Carga -->
     <div id="loading" class="text-center py-8 text-blue-400 animate-pulse text-sm">
         Calculando volatilidad del mercado...
     </div>
 
     <!-- Tabla Ultra Compacta -->
-    <div id="tabla-container" class="hidden rounded-lg overflow-hidden border border-gray-800 bg-gray-900">
+    <div id="tabla-container" class="hidden rounded-lg overflow-hidden border border-gray-800 bg-gray-900 shadow-xl">
         <table class="w-full text-left border-collapse text-[10px] sm:text-xs">
             <thead>
                 <tr class="border-b border-gray-800 bg-gray-950/50">
@@ -49,37 +59,58 @@
     </div>
 
     <script>
-        let datosGlobales = []; // Guarda los datos para recalcular sin hacer peticiones nuevas
+        let datosGlobales = [];
+        let categoriaActual = 'Todos';
 
-        // Tamaños de contrato aproximados en Exness/MT5 para el cálculo de lotaje
         function obtenerTamanoContrato(categoria, activo) {
             if (categoria === "Forex") return 100000;
             if (activo.includes("Oro") || activo === "GC=F") return 100;
             if (activo.includes("Plata")) return 5000;
             if (activo.includes("WTI") || activo.includes("Brent")) return 1000;
-            return 1; // Cripto e Índices (MT5 suele usar 1)
+            return 1;
+        }
+
+        // Función para cambiar el color de los botones al tocarlos
+        function actualizarEstiloBotones(categoriaSeleccionada) {
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-gray-800', 'text-gray-400');
+            });
+            const btnActivo = document.getElementById(`btn-${categoriaSeleccionada}`);
+            if(btnActivo) {
+                btnActivo.classList.remove('bg-gray-800', 'text-gray-400');
+                btnActivo.classList.add('bg-blue-600', 'text-white');
+            }
+        }
+
+        // Función que filtra los datos según el botón presionado
+        function filtrarCategoria(categoria) {
+            categoriaActual = categoria;
+            actualizarEstiloBotones(categoria);
+            renderizarTabla();
         }
 
         function renderizarTabla() {
             const capital = parseFloat(document.getElementById('input-capital').value) || 0;
             const riesgoPorcentaje = parseFloat(document.getElementById('input-riesgo').value) || 0;
             const ratioTP = parseFloat(document.getElementById('input-ratio').value) || 0;
-            
             const dineroEnRiesgo = capital * (riesgoPorcentaje / 100);
+            
             const tbody = document.getElementById('resultados-body');
             tbody.innerHTML = '';
 
-            datosGlobales.forEach(item => {
-                // Cálculo de lotaje
+            // Filtramos el array antes de dibujarlo en la tabla
+            const datosFiltrados = categoriaActual === 'Todos' 
+                ? datosGlobales 
+                : datosGlobales.filter(item => item.categoria === categoriaActual);
+
+            datosFiltrados.forEach(item => {
                 const tamanoContrato = obtenerTamanoContrato(item.categoria, item.activo);
                 let lotes = dineroEnRiesgo / (item.distancia_sl * tamanoContrato);
-                lotes = lotes < 0.01 ? 0.01 : lotes; // Mínimo lotaje MT5
+                lotes = lotes < 0.01 ? 0.01 : lotes;
 
-                // Cálculos Compra (Long)
                 const slCompra = item.precio - item.distancia_sl;
                 const tpCompra = item.precio + (item.distancia_sl * ratioTP);
-
-                // Cálculos Venta (Short)
                 const slVenta = item.precio + item.distancia_sl;
                 const tpVenta = item.precio - (item.distancia_sl * ratioTP);
 
@@ -122,7 +153,6 @@
             }
         }
 
-        // Escuchar cambios en los inputs para recalcular en tiempo real
         document.getElementById('input-capital').addEventListener('input', renderizarTabla);
         document.getElementById('input-riesgo').addEventListener('input', renderizarTabla);
         document.getElementById('input-ratio').addEventListener('input', renderizarTabla);
