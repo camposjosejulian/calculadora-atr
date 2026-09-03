@@ -2,65 +2,131 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora ATR y Stop Loss - Mercados</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- El user-scalable=no evita que el celular haga zoom al tocar la pantalla -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ATR & Gestión Exness</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Ajustes para pantallas de celular muy estrechas */
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        td, th { vertical-align: middle; }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen p-4 md:p-8">
-    <div class="max-w-6xl mx-auto">
-        <header class="mb-8 text-center">
-            <h1 class="text-3xl font-bold tracking-tight text-emerald-400 mb-2">Panel de Volatilidad y Stop Loss (ATR)</h1>
-            <p class="text-slate-400 text-sm">Cálculo dinámico en tiempo real integrado con gestión de riesgo (1.5x ATR)</p>
-        </header>
-
-        <div id="loading" class="text-center py-12 text-slate-400 animate-pulse">
-            Consultando precios, calculando ATR y niveles de riesgo para los 22 activos...
+<body class="bg-gray-950 text-gray-300 min-h-screen p-2 text-xs sm:text-sm font-sans">
+    
+    <!-- Panel de Control Interactivo -->
+    <div class="bg-gray-900 rounded-lg p-3 mb-3 border border-gray-800 shadow-lg">
+        <div class="grid grid-cols-3 gap-2 text-center mb-1">
+            <label class="text-gray-400 text-[10px] uppercase font-bold">Capital ($)</label>
+            <label class="text-gray-400 text-[10px] uppercase font-bold">Riesgo (%)</label>
+            <label class="text-gray-400 text-[10px] uppercase font-bold">Ratio TP (1:X)</label>
         </div>
-
-        <div id="tabla-container" class="hidden overflow-x-auto rounded-xl border border-slate-800 bg-slate-900 shadow-xl">
-            <table class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="border-b border-slate-800 bg-slate-800/50 text-slate-300 text-sm">
-                        <th class="p-4">Activo</th>
-                        <th class="p-4">Precio Actual</th>
-                        <th class="p-4">ATR (15m)</th>
-                        <th class="p-4 text-rose-400">SL Compra (Long)</th>
-                        <th class="p-4 text-cyan-400">SL Venta (Short)</th>
-                    </tr>
-                </thead>
-                <tbody id="resultados-body" class="divide-y divide-slate-800/60 text-sm"></tbody>
-            </table>
+        <div class="grid grid-cols-3 gap-2">
+            <input id="input-capital" type="number" value="1000" class="w-full bg-gray-800 text-white text-center p-1.5 rounded border border-gray-700 focus:border-blue-500 outline-none">
+            <input id="input-riesgo" type="number" value="1" class="w-full bg-gray-800 text-white text-center p-1.5 rounded border border-gray-700 focus:border-blue-500 outline-none">
+            <input id="input-ratio" type="number" value="2" class="w-full bg-gray-800 text-white text-center p-1.5 rounded border border-gray-700 focus:border-blue-500 outline-none">
         </div>
     </div>
 
+    <!-- Mensaje de Carga -->
+    <div id="loading" class="text-center py-8 text-blue-400 animate-pulse text-sm">
+        Calculando volatilidad del mercado...
+    </div>
+
+    <!-- Tabla Ultra Compacta -->
+    <div id="tabla-container" class="hidden rounded-lg overflow-hidden border border-gray-800 bg-gray-900">
+        <table class="w-full text-left border-collapse text-[10px] sm:text-xs">
+            <thead>
+                <tr class="border-b border-gray-800 bg-gray-950/50">
+                    <th class="p-1.5 font-semibold">Activo<br><span class="text-gray-500 font-normal">Precio</span></th>
+                    <th class="p-1.5 text-blue-400 font-semibold text-center">ATR<br><span class="text-gray-500 font-normal">Lotes</span></th>
+                    <th class="p-1.5 text-green-500 font-semibold text-center border-l border-gray-800">COMPRA<br>(Long)</th>
+                    <th class="p-1.5 text-red-500 font-semibold text-center border-l border-gray-800">VENTA<br>(Short)</th>
+                </tr>
+            </thead>
+            <tbody id="resultados-body" class="divide-y divide-gray-800/50"></tbody>
+        </table>
+    </div>
+
     <script>
+        let datosGlobales = []; // Guarda los datos para recalcular sin hacer peticiones nuevas
+
+        // Tamaños de contrato aproximados en Exness/MT5 para el cálculo de lotaje
+        function obtenerTamanoContrato(categoria, activo) {
+            if (categoria === "Forex") return 100000;
+            if (activo.includes("Oro") || activo === "GC=F") return 100;
+            if (activo.includes("Plata")) return 5000;
+            if (activo.includes("WTI") || activo.includes("Brent")) return 1000;
+            return 1; // Cripto e Índices (MT5 suele usar 1)
+        }
+
+        function renderizarTabla() {
+            const capital = parseFloat(document.getElementById('input-capital').value) || 0;
+            const riesgoPorcentaje = parseFloat(document.getElementById('input-riesgo').value) || 0;
+            const ratioTP = parseFloat(document.getElementById('input-ratio').value) || 0;
+            
+            const dineroEnRiesgo = capital * (riesgoPorcentaje / 100);
+            const tbody = document.getElementById('resultados-body');
+            tbody.innerHTML = '';
+
+            datosGlobales.forEach(item => {
+                // Cálculo de lotaje
+                const tamanoContrato = obtenerTamanoContrato(item.categoria, item.activo);
+                let lotes = dineroEnRiesgo / (item.distancia_sl * tamanoContrato);
+                lotes = lotes < 0.01 ? 0.01 : lotes; // Mínimo lotaje MT5
+
+                // Cálculos Compra (Long)
+                const slCompra = item.precio - item.distancia_sl;
+                const tpCompra = item.precio + (item.distancia_sl * ratioTP);
+
+                // Cálculos Venta (Short)
+                const slVenta = item.precio + item.distancia_sl;
+                const tpVenta = item.precio - (item.distancia_sl * ratioTP);
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-800/30';
+                
+                row.innerHTML = `
+                    <td class="p-1.5 whitespace-nowrap">
+                        <div class="font-bold text-gray-200">${item.activo}</div>
+                        <div class="text-gray-500 font-mono">${item.precio.toFixed(4)}</div>
+                    </td>
+                    <td class="p-1.5 text-center whitespace-nowrap">
+                        <div class="font-bold text-blue-400">${item.atr.toFixed(4)}</div>
+                        <div class="text-gray-300 font-mono mt-0.5 bg-gray-800 rounded px-1">${lotes.toFixed(2)}</div>
+                    </td>
+                    <td class="p-1.5 text-center border-l border-gray-800 bg-green-950/10">
+                        <div class="text-green-500/80 font-mono">SL: ${slCompra.toFixed(4)}</div>
+                        <div class="text-green-400 font-bold font-mono mt-0.5">TP: ${tpCompra.toFixed(4)}</div>
+                    </td>
+                    <td class="p-1.5 text-center border-l border-gray-800 bg-red-950/10">
+                        <div class="text-red-500/80 font-mono">SL: ${slVenta.toFixed(4)}</div>
+                        <div class="text-red-400 font-bold font-mono mt-0.5">TP: ${tpVenta.toFixed(4)}</div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
         async function cargarDatos() {
             try {
                 const response = await fetch('/api/atr');
-                const data = await response.json();
+                datosGlobales = await response.json();
                 
-                const tbody = document.getElementById('resultados-body');
-                tbody.innerHTML = '';
-                
-                data.forEach(item => {
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-slate-800/30 transition-colors';
-                    row.innerHTML = `
-                        <td class="p-4 font-medium text-white">${item.activo}</td>
-                        <td class="p-4 text-slate-300">${item.precio}</td>
-                        <td class="p-4 font-semibold text-emerald-400">${item.atr}</td>
-                        <td class="p-4 font-mono text-rose-400">${item.sl_compra}</td>
-                        <td class="p-4 font-mono text-cyan-400">${item.sl_venta}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('tabla-container').classList.remove('hidden');
+                
+                renderizarTabla();
             } catch (error) {
-                document.getElementById('loading').innerText = 'Error al cargar los datos del servidor.';
+                document.getElementById('loading').innerText = 'Error de conexión. Recarga la página.';
             }
         }
+
+        // Escuchar cambios en los inputs para recalcular en tiempo real
+        document.getElementById('input-capital').addEventListener('input', renderizarTabla);
+        document.getElementById('input-riesgo').addEventListener('input', renderizarTabla);
+        document.getElementById('input-ratio').addEventListener('input', renderizarTabla);
+
         cargarDatos();
     </script>
 </body>
